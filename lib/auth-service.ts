@@ -160,4 +160,3 @@ export const authService = {
     console.log("Deleting session:", sessionToken)
   },
 }
-

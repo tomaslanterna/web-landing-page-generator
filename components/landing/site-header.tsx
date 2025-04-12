@@ -110,4 +110,3 @@ export function SiteHeader() {
     </header>
   )
 }
-

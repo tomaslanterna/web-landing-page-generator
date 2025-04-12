@@ -98,4 +98,3 @@ export function TestimonialsSection() {
     </section>
   )
 }
-

@@ -1463,4 +1463,3 @@ function adjustColor(color: string, amount: number): string {
   const b = Math.min(255, Math.max(0, (num & 0x0000ff) + amount))
   return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`
 }
-

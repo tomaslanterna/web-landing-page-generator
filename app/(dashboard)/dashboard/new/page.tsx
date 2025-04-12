@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import saveAs from "file-saver"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -10,13 +10,15 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
-import { Plus, Trash2, ExternalLink, Download, Rocket } from "lucide-react"
+import { Plus, Trash2, ExternalLink, Download, Rocket, Sparkles } from "lucide-react"
 import ColorPicker from "@/components/color-picker"
 import ImageUploader from "@/components/image-uploader"
 import Preview from "@/components/preview"
 import { generateHTML, generateCSS, generateJS, generateSeparatePages } from "@/lib/generator"
 // Importar el nuevo componente de diálogo
 import { DeployDialog } from "@/components/deploy-dialog"
+// Agregar useSearchParams para obtener los parámetros de la URL
+import { useSearchParams } from "next/navigation"
 
 interface Feature {
   title: string
@@ -87,6 +89,38 @@ export default function Home() {
   const [deployDialogOpen, setDeployDialogOpen] = useState(false)
   const [deployUrl, setDeployUrl] = useState<string | null>(null)
   const [isDeploying, setIsDeploying] = useState(false)
+  // Add these states after deployUrl and isDeploying
+  const [useCustomDomain, setUseCustomDomain] = useState(false)
+  const [customDomain, setCustomDomain] = useState<string | undefined>(undefined)
+  const [isVerifyingDomain, setIsVerifyingDomain] = useState(false)
+  const [domainVerificationError, setDomainVerificationError] = useState<string | null>(null)
+
+  // Dentro de la función Home, agregar:
+  const searchParams = useSearchParams()
+  const aiGenerated = searchParams.get("aiGenerated") === "true"
+  const settingsId = searchParams.get("settingsId")
+
+  // Agregar un useEffect para cargar los settings generados por la IA
+  useEffect(() => {
+    const loadAISettings = async () => {
+      if (aiGenerated && settingsId) {
+        try {
+          const response = await fetch(`/api/ai-landing?id=${settingsId}`)
+
+          if (!response.ok) {
+            throw new Error("Error al cargar los settings generados por la IA")
+          }
+
+          const data = await response.json()
+          setSettings(data.settings)
+        } catch (error) {
+          console.error("Error loading AI settings:", error)
+        }
+      }
+    }
+
+    loadAISettings()
+  }, [aiGenerated, settingsId])
 
   const handleColorChange = (color: string, type: string) => {
     setSettings({
@@ -139,16 +173,14 @@ export default function Home() {
     })
   }
 
-  const handlePillsChange = (pills: string) => {
-    const pillsArray = pills
-      .split(",")
-      .map((pill) => pill.trim())
-      .filter((pill) => pill !== "")
+  const handlePillsChange = (pillsText: string) => {
+    // Simplemente actualiza el texto sin procesar las comas
     setSettings({
       ...settings,
       hero: {
         ...settings.hero,
-        pills: pillsArray,
+        pills: pillsText.split(",").map((pill) => pill.trim()),
+        // No filtramos los elementos vacíos para permitir escribir comas
       },
     })
   }
@@ -251,32 +283,53 @@ export default function Home() {
   }
 
   // Agregar esta función dentro de la función Home
-  const handleDeploy = async (projectName: string) => {
+  const handleDeploy = async (projectName: string, customDomain?: string) => {
     try {
+      console.log("Deploy initiated with:", { projectName, customDomain })
       setIsDeploying(true)
 
-      // Enviar los settings y el nombre del proyecto a la API
+      if (customDomain) {
+        setIsVerifyingDomain(true)
+        console.log("Verifying domain:", customDomain)
+        // In a real case, we would verify domain availability here
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+        setIsVerifyingDomain(false)
+      }
+
+      // Send settings and project name to the API
+      console.log("Sending request to /api/deploy")
       const response = await fetch("/api/deploy", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ settings, projectName }),
+        body: JSON.stringify({
+          settings,
+          projectName,
+          customDomain,
+        }),
       })
 
       const data = await response.json()
+      console.log("Deploy API response:", data)
 
       if (!response.ok) {
         throw new Error(data.error || "Failed to deploy")
       }
 
-      // Guardar la URL del despliegue
+      // Save deployment URL
       setDeployUrl(data.deployUrl)
+      setCustomDomain(data.customDomain)
     } catch (error) {
       console.error("Error deploying:", error)
-      alert(`Error al desplegar: ${(error as Error).message}`)
+      if ((error as Error).message.includes("domain")) {
+        setDomainVerificationError((error as Error).message)
+      } else {
+        alert(`Error al desplegar: ${(error as Error).message}`)
+      }
     } finally {
       setIsDeploying(false)
+      setIsVerifyingDomain(false)
     }
   }
 
@@ -308,17 +361,25 @@ export default function Home() {
     <main className="container mx-auto py-8 px-4">
       <h1 className="text-4xl font-bold text-center mb-8">Landing Page Generator</h1>
 
+      {aiGenerated && (
+        <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-md">
+          <p className="text-green-800 flex items-center">
+            <Sparkles className="h-4 w-4 mr-2" />
+            Landing page generada con IA. Puedes personalizar los detalles a continuación.
+          </p>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-1">
           <Tabs defaultValue="layout" className="w-full">
-            <TabsList className="grid grid-cols-7 mb-4">
+            <TabsList className="grid grid-cols-6 mb-4">
               <TabsTrigger value="layout">Layout</TabsTrigger>
               <TabsTrigger value="colors">Colors</TabsTrigger>
               <TabsTrigger value="hero">Hero</TabsTrigger>
               <TabsTrigger value="features">Features</TabsTrigger>
               <TabsTrigger value="about">About</TabsTrigger>
               <TabsTrigger value="contact">Contact</TabsTrigger>
-              <TabsTrigger value="images">Images</TabsTrigger>
             </TabsList>
 
             <TabsContent value="layout" className="space-y-4">
@@ -468,7 +529,10 @@ export default function Home() {
                     />
                   </div>
                   <div>
-                    <Label>Background Image (recommended: at least 1920x1080px)</Label>
+                    <Label>Background Image</Label>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Recomendado: 1920x1080px o mayor. Formato panorámico para mejor visualización.
+                    </p>
                     <ImageUploader
                       onImagesChange={(images) => {
                         if (images.length > 0) {
@@ -476,6 +540,7 @@ export default function Home() {
                         }
                       }}
                       maxImages={1}
+                      imageType="hero"
                     />
                     {settings.hero.backgroundImage && (
                       <p className="text-xs text-muted-foreground mt-1">Background image uploaded</p>
@@ -554,6 +619,9 @@ export default function Home() {
                       </div>
                       <div>
                         <Label>Feature Image</Label>
+                        <p className="text-xs text-muted-foreground mb-2">
+                          Recomendado: 600x400px. Preferiblemente formato cuadrado o ligeramente rectangular.
+                        </p>
                         <ImageUploader
                           onImagesChange={(images) => {
                             if (images.length > 0) {
@@ -561,6 +629,7 @@ export default function Home() {
                             }
                           }}
                           maxImages={1}
+                          imageType="feature"
                         />
                       </div>
                     </div>
@@ -592,6 +661,9 @@ export default function Home() {
                   </div>
                   <div>
                     <Label>About Image</Label>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Recomendado: 800x600px. Formato rectangular para mostrar el equipo o las instalaciones.
+                    </p>
                     <ImageUploader
                       onImagesChange={(images) => {
                         if (images.length > 0) {
@@ -599,6 +671,7 @@ export default function Home() {
                         }
                       }}
                       maxImages={1}
+                      imageType="about"
                     />
                     {settings.about.image && <p className="text-xs text-muted-foreground mt-1">About image uploaded</p>}
                   </div>
@@ -659,16 +732,6 @@ export default function Home() {
                 </div>
               </Card>
             </TabsContent>
-
-            <TabsContent value="images" className="space-y-4">
-              <Card className="p-4">
-                <h2 className="text-xl font-semibold mb-4">Additional Images</h2>
-                <p className="text-sm text-muted-foreground mb-4">
-                  These images can be used in other sections of your landing page.
-                </p>
-                <ImageUploader onImagesChange={handleImageUpload} />
-              </Card>
-            </TabsContent>
           </Tabs>
 
           <div className="flex gap-4 mt-6">
@@ -718,8 +781,9 @@ export default function Home() {
         onDeploy={handleDeploy}
         deployUrl={deployUrl}
         isDeploying={isDeploying}
+        isVerifyingDomain={isVerifyingDomain}
+        domainVerificationError={domainVerificationError}
       />
     </main>
   )
 }
-

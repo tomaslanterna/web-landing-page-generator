@@ -13,18 +13,31 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Loader2 } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
 
 interface DeployDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onDeploy: (projectName: string) => Promise<void>
+  onDeploy: (projectName: string, customDomain?: string) => Promise<void>
   deployUrl: string | null
   isDeploying: boolean
+  isVerifyingDomain?: boolean
+  domainVerificationError?: string | null
 }
 
-export function DeployDialog({ open, onOpenChange, onDeploy, deployUrl, isDeploying }: DeployDialogProps) {
+export function DeployDialog({
+  open,
+  onOpenChange,
+  onDeploy,
+  deployUrl,
+  isDeploying,
+  isVerifyingDomain = false,
+  domainVerificationError = null,
+}: DeployDialogProps) {
   const [projectName, setProjectName] = useState("")
   const [error, setError] = useState<string | null>(null)
+  const [useCustomDomain, setUseCustomDomain] = useState(false)
+  const [customDomain, setCustomDomain] = useState("")
 
   const handleDeploy = async () => {
     if (!projectName.trim()) {
@@ -39,8 +52,18 @@ export function DeployDialog({ open, onOpenChange, onDeploy, deployUrl, isDeploy
       return
     }
 
+    // Si está usando dominio personalizado, validar el formato
+    if (useCustomDomain && customDomain) {
+      const validDomain = /^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/
+      if (!validDomain.test(customDomain)) {
+        setError("Por favor ingresa un dominio válido (ejemplo: midominio.com)")
+        return
+      }
+    }
+
     setError(null)
-    await onDeploy(projectName)
+    // Pass the customDomain parameter only if useCustomDomain is true
+    await onDeploy(projectName, useCustomDomain ? customDomain : undefined)
   }
 
   return (
@@ -65,20 +88,59 @@ export function DeployDialog({ open, onOpenChange, onDeploy, deployUrl, isDeploy
                   className="col-span-4"
                   value={projectName}
                   onChange={(e) => setProjectName(e.target.value.toLowerCase())}
-                  disabled={isDeploying}
+                  disabled={isDeploying || isVerifyingDomain}
                 />
                 {error && <p className="col-span-4 text-sm text-destructive">{error}</p>}
                 <p className="col-span-4 text-xs text-muted-foreground">
-                  Tu URL será: {projectName ? `https://${projectName}.vercel.app` : "..."}
+                  Tu URL de Vercel será: {projectName ? `https://${projectName}.vercel.app` : "..."}
                 </p>
+              </div>
+
+              <div className="grid grid-cols-4 items-center gap-4 mt-4">
+                <div className="col-span-4 flex items-center space-x-2">
+                  <Switch
+                    id="use-custom-domain"
+                    checked={useCustomDomain}
+                    onCheckedChange={setUseCustomDomain}
+                    disabled={isDeploying || isVerifyingDomain}
+                  />
+                  <Label htmlFor="use-custom-domain">Usar dominio personalizado</Label>
+                </div>
+
+                {useCustomDomain && (
+                  <>
+                    <Label htmlFor="custom-domain" className="col-span-4 mt-2">
+                      Dominio personalizado
+                    </Label>
+                    <Input
+                      id="custom-domain"
+                      placeholder="midominio.com"
+                      className="col-span-4"
+                      value={customDomain}
+                      onChange={(e) => setCustomDomain(e.target.value.toLowerCase())}
+                      disabled={isDeploying || isVerifyingDomain}
+                    />
+                    {domainVerificationError && (
+                      <p className="col-span-4 text-sm text-destructive">{domainVerificationError}</p>
+                    )}
+                    <p className="col-span-4 text-xs text-muted-foreground">
+                      Asegúrate de tener acceso a la configuración DNS de este dominio.
+                    </p>
+                  </>
+                )}
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isDeploying}>
+              <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isDeploying || isVerifyingDomain}>
                 Cancelar
               </Button>
-              <Button onClick={handleDeploy} disabled={isDeploying}>
-                {isDeploying ? (
+              <Button onClick={handleDeploy} disabled={isDeploying || isVerifyingDomain}>
+                {isVerifyingDomain ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Verificando dominio...
+                  </>
+                ) : isDeploying ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Desplegando...
@@ -112,4 +174,3 @@ export function DeployDialog({ open, onOpenChange, onDeploy, deployUrl, isDeploy
     </Dialog>
   )
 }
-

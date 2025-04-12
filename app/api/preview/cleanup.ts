@@ -22,4 +22,3 @@ export async function GET() {
   await cleanupPreviews()
   return NextResponse.json({ success: true })
 }
-

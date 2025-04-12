@@ -8,4 +8,3 @@ export default async function PreviewPage({ params }: { params: { id: string } }
     </div>
   )
 }
-

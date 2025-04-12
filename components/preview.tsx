@@ -78,4 +78,3 @@ export default function Preview({ settings }: PreviewProps) {
 
   return <iframe ref={iframeRef} title="Landing Page Preview" className="w-full h-full border-0" />
 }
-
