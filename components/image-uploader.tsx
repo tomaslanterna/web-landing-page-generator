@@ -7,6 +7,9 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { X, Upload } from "lucide-react"
 
+// Importar la biblioteca browser-image-compression
+import imageCompression from "browser-image-compression"
+
 interface ImageUploaderProps {
   onImagesChange: (images: string[]) => void
   maxImages?: number
@@ -87,6 +90,7 @@ export default function ImageUploader({
     })
   }
 
+  // Modificar la función handleFileChange para comprimir las imágenes
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       setError(null)
@@ -94,22 +98,35 @@ export default function ImageUploader({
       const filesToProcess = Array.from(e.target.files).slice(0, maxImages - images.length)
 
       for (const file of filesToProcess) {
-        const isValid = await validateImage(file)
+        try {
+          // Comprimir la imagen antes de validarla
+          const options = {
+            maxSizeMB: 0.5, // Máximo 500KB
+            maxWidthOrHeight: 1920, // Limitar dimensiones máximas
+            useWebWorker: true,
+          }
 
-        if (isValid) {
-          const reader = new FileReader()
-          reader.onload = (event) => {
-            if (event.target && typeof event.target.result === "string") {
-              newImages.push(event.target.result)
+          const compressedFile = await imageCompression(file, options)
+          const isValid = await validateImage(compressedFile)
 
-              if (newImages.length === filesToProcess.filter((f) => f !== file || isValid).length) {
-                const updatedImages = [...images, ...newImages].slice(0, maxImages)
-                setImages(updatedImages)
-                onImagesChange(updatedImages)
+          if (isValid) {
+            const reader = new FileReader()
+            reader.onload = (event) => {
+              if (event.target && typeof event.target.result === "string") {
+                newImages.push(event.target.result)
+
+                if (newImages.length === filesToProcess.filter((f) => f !== file || isValid).length) {
+                  const updatedImages = [...images, ...newImages].slice(0, maxImages)
+                  setImages(updatedImages)
+                  onImagesChange(updatedImages)
+                }
               }
             }
+            reader.readAsDataURL(compressedFile)
           }
-          reader.readAsDataURL(file)
+        } catch (error) {
+          console.error("Error comprimiendo imagen:", error)
+          setError("Error al procesar la imagen. Intenta con una imagen más pequeña.")
         }
       }
     }

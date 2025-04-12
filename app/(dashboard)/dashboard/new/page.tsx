@@ -258,14 +258,54 @@ export default function Home() {
     try {
       setIsCreatingPreview(true)
 
+      // Crear una copia de los settings para no modificar el estado original
+      const previewSettings = JSON.parse(JSON.stringify(settings))
+
+      // Comprimir las imágenes antes de enviarlas
+      if (previewSettings.images && Array.isArray(previewSettings.images)) {
+        previewSettings.images = previewSettings.images.map((img: string) => {
+          if (img && img.length > 500000) {
+            return img.substring(0, 500000) // Truncar imágenes muy grandes
+          }
+          return img
+        })
+      }
+
+      // Comprimir otras imágenes en el objeto settings
+      if (
+        previewSettings.hero &&
+        previewSettings.hero.backgroundImage &&
+        previewSettings.hero.backgroundImage.length > 500000
+      ) {
+        previewSettings.hero.backgroundImage = previewSettings.hero.backgroundImage.substring(0, 500000)
+      }
+
+      if (previewSettings.about && previewSettings.about.image && previewSettings.about.image.length > 500000) {
+        previewSettings.about.image = previewSettings.about.image.substring(0, 500000)
+      }
+
+      if (previewSettings.features && Array.isArray(previewSettings.features)) {
+        previewSettings.features = previewSettings.features.map((feature: any) => {
+          if (feature.image && feature.image.length > 500000) {
+            feature.image = feature.image.substring(0, 500000)
+          }
+          return feature
+        })
+      }
+
       // Send the settings to the API to create a preview
       const response = await fetch("/api/preview", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(settings),
+        body: JSON.stringify(previewSettings),
       })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(`Error del servidor: ${response.status} ${errorText}`)
+      }
 
       const data = await response.json()
 
@@ -273,10 +313,14 @@ export default function Home() {
         // Open the preview in a new tab
         window.open(`/api/preview?id=${data.previewId}`, "_blank")
       } else {
-        console.error("Failed to create preview")
+        console.error("Failed to create preview: No preview ID returned")
+        alert("Error al crear la vista previa. Por favor, intenta con imágenes más pequeñas o menos imágenes.")
       }
     } catch (error) {
       console.error("Error creating preview:", error)
+      alert(
+        `Error al crear la vista previa: ${(error as Error).message || "Error desconocido"}. Intenta con imágenes más pequeñas.`,
+      )
     } finally {
       setIsCreatingPreview(false)
     }
