@@ -65,8 +65,8 @@
     "react-icons": "latest",
     "uuid": "latest",
     "bcryptjs": "latest",
-    "browser-image-compression": "latest",
-    "file-saver": "latest"
+    "file-saver": "latest",
+    "browser-image-compression": "latest"
   },
   "devDependencies": {
     "@types/node": "^22",

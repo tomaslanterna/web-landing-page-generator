@@ -24,33 +24,50 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const settings = await request.json()
+    // Obtener los settings de la solicitud
+    let settings
+    try {
+      settings = await request.json()
+    } catch (parseError) {
+      console.error("Error parsing request body:", parseError)
+      return NextResponse.json(
+        { error: "Error al procesar la solicitud. El cuerpo de la solicitud no es un JSON válido." },
+        { status: 400 },
+      )
+    }
+
+    // Procesar específicamente la imagen de hero
+    if (settings.hero && settings.hero.backgroundImage) {
+      const heroImageLength = settings.hero.backgroundImage.length
+      console.log(`Tamaño de la imagen de hero: ${heroImageLength / 1024} KB`)
+
+      if (heroImageLength > 300000) {
+        console.log("La imagen de hero es demasiado grande, truncando...")
+        settings.hero.backgroundImage = settings.hero.backgroundImage.substring(0, 300000)
+      }
+    }
 
     // Procesar las imágenes para reducir su tamaño
     if (settings.images && Array.isArray(settings.images)) {
       // Limitar la longitud de las cadenas base64 de las imágenes
       settings.images = settings.images.map((img: string) => {
-        if (img && img.length > 500000) {
-          // Si la imagen es mayor a ~500KB
-          return img.substring(0, 500000) // Truncar la imagen
+        if (img && img.length > 300000) {
+          // Si la imagen es mayor a ~300KB
+          return img.substring(0, 300000) // Truncar la imagen
         }
         return img
       })
     }
 
     // Procesar imágenes en otras secciones
-    if (settings.hero && settings.hero.backgroundImage && settings.hero.backgroundImage.length > 500000) {
-      settings.hero.backgroundImage = settings.hero.backgroundImage.substring(0, 500000)
-    }
-
-    if (settings.about && settings.about.image && settings.about.image.length > 500000) {
-      settings.about.image = settings.about.image.substring(0, 500000)
+    if (settings.about && settings.about.image && settings.about.image.length > 300000) {
+      settings.about.image = settings.about.image.substring(0, 300000)
     }
 
     if (settings.features && Array.isArray(settings.features)) {
       settings.features = settings.features.map((feature: any) => {
-        if (feature.image && feature.image.length > 500000) {
-          feature.image = feature.image.substring(0, 500000)
+        if (feature.image && feature.image.length > 300000) {
+          feature.image = feature.image.substring(0, 300000)
         }
         return feature
       })

@@ -19,6 +19,7 @@ import { generateHTML, generateCSS, generateJS, generateSeparatePages } from "@/
 import { DeployDialog } from "@/components/deploy-dialog"
 // Agregar useSearchParams para obtener los parámetros de la URL
 import { useSearchParams } from "next/navigation"
+import imageCompression from "browser-image-compression"
 
 interface Feature {
   title: string
@@ -261,39 +262,84 @@ export default function Home() {
       // Crear una copia de los settings para no modificar el estado original
       const previewSettings = JSON.parse(JSON.stringify(settings))
 
-      // Comprimir las imágenes antes de enviarlas
+      // Manejar específicamente la imagen de hero
+      if (previewSettings.hero && previewSettings.hero.backgroundImage) {
+        // Verificar si la imagen de hero es demasiado grande
+        if (previewSettings.hero.backgroundImage.length > 400000) {
+          console.log("La imagen de hero es demasiado grande, aplicando compresión adicional")
+
+          try {
+            // Convertir la cadena base64 a un Blob
+            const base64Data = previewSettings.hero.backgroundImage.split(",")[1]
+            const byteCharacters = atob(base64Data)
+            const byteArrays = []
+
+            for (let offset = 0; offset < byteCharacters.length; offset += 1024) {
+              const slice = byteCharacters.slice(offset, offset + 1024)
+              const byteNumbers = new Array(slice.length)
+              for (let i = 0; i < slice.length; i++) {
+                byteNumbers[i] = slice.charCodeAt(i)
+              }
+              const byteArray = new Uint8Array(byteNumbers)
+              byteArrays.push(byteArray)
+            }
+
+            const blob = new Blob(byteArrays, { type: "image/jpeg" })
+
+            // Comprimir la imagen con opciones más agresivas
+            const compressedFile = await imageCompression(new File([blob], "hero.jpg", { type: "image/jpeg" }), {
+              maxSizeMB: 0.2, // Comprimir a 200KB
+              maxWidthOrHeight: 1200,
+              initialQuality: 0.5, // Calidad baja
+              useWebWorker: true,
+            })
+
+            // Convertir de nuevo a base64
+            const reader = new FileReader()
+            reader.readAsDataURL(compressedFile)
+
+            await new Promise((resolve) => {
+              reader.onloadend = () => {
+                if (typeof reader.result === "string") {
+                  previewSettings.hero.backgroundImage = reader.result
+                  console.log("Imagen de hero recomprimida con éxito")
+                }
+                resolve(null)
+              }
+            })
+          } catch (compressionError) {
+            console.error("Error al recomprimir la imagen de hero:", compressionError)
+            // Si falla la recompresión, truncar la imagen
+            previewSettings.hero.backgroundImage = previewSettings.hero.backgroundImage.substring(0, 400000)
+          }
+        }
+      }
+
+      // Comprimir otras imágenes en el objeto settings
       if (previewSettings.images && Array.isArray(previewSettings.images)) {
         previewSettings.images = previewSettings.images.map((img: string) => {
-          if (img && img.length > 500000) {
-            return img.substring(0, 500000) // Truncar imágenes muy grandes
+          if (img && img.length > 400000) {
+            return img.substring(0, 400000)
           }
           return img
         })
       }
 
-      // Comprimir otras imágenes en el objeto settings
-      if (
-        previewSettings.hero &&
-        previewSettings.hero.backgroundImage &&
-        previewSettings.hero.backgroundImage.length > 500000
-      ) {
-        previewSettings.hero.backgroundImage = previewSettings.hero.backgroundImage.substring(0, 500000)
-      }
-
-      if (previewSettings.about && previewSettings.about.image && previewSettings.about.image.length > 500000) {
-        previewSettings.about.image = previewSettings.about.image.substring(0, 500000)
+      if (previewSettings.about && previewSettings.about.image && previewSettings.about.image.length > 400000) {
+        previewSettings.about.image = previewSettings.about.image.substring(0, 400000)
       }
 
       if (previewSettings.features && Array.isArray(previewSettings.features)) {
         previewSettings.features = previewSettings.features.map((feature: any) => {
-          if (feature.image && feature.image.length > 500000) {
-            feature.image = feature.image.substring(0, 500000)
+          if (feature.image && feature.image.length > 400000) {
+            feature.image = feature.image.substring(0, 400000)
           }
           return feature
         })
       }
 
-      // Send the settings to the API to create a preview
+      // Enviar los settings a la API para crear una vista previa
+      console.log("Enviando solicitud a la API de vista previa")
       const response = await fetch("/api/preview", {
         method: "POST",
         headers: {
@@ -310,7 +356,7 @@ export default function Home() {
       const data = await response.json()
 
       if (data.previewId) {
-        // Open the preview in a new tab
+        // Abrir la vista previa en una nueva pestaña
         window.open(`/api/preview?id=${data.previewId}`, "_blank")
       } else {
         console.error("Failed to create preview: No preview ID returned")

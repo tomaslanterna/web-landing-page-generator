@@ -99,21 +99,38 @@ export default function ImageUploader({
 
       for (const file of filesToProcess) {
         try {
-          // Comprimir la imagen antes de validarla
+          // Configurar opciones de compresión según el tipo de imagen
           const options = {
-            maxSizeMB: 0.5, // Máximo 500KB
-            maxWidthOrHeight: 1920, // Limitar dimensiones máximas
+            // Configuración más agresiva para imágenes de hero
+            maxSizeMB: imageType === "hero" ? 0.3 : 0.5, // 300KB para hero, 500KB para otras
+            maxWidthOrHeight: imageType === "hero" ? 1600 : 1200, // Reducir dimensiones para hero
             useWebWorker: true,
+            // Aumentar la compresión para imágenes de hero
+            initialQuality: imageType === "hero" ? 0.6 : 0.8, // Calidad más baja para hero
           }
 
+          console.log(`Comprimiendo imagen de tipo ${imageType} con opciones:`, options)
+
+          // Comprimir la imagen
           const compressedFile = await imageCompression(file, options)
+          console.log(`Tamaño original: ${file.size / 1024} KB, Tamaño comprimido: ${compressedFile.size / 1024} KB`)
+
           const isValid = await validateImage(compressedFile)
 
           if (isValid) {
             const reader = new FileReader()
             reader.onload = (event) => {
               if (event.target && typeof event.target.result === "string") {
-                newImages.push(event.target.result)
+                // Para imágenes de hero, verificar el tamaño de la cadena base64
+                const base64String = event.target.result
+                console.log(`Longitud de la cadena base64: ${base64String.length} caracteres`)
+
+                // Si la imagen es muy grande incluso después de la compresión, mostrar una advertencia
+                if (base64String.length > 500000 && imageType === "hero") {
+                  console.warn("La imagen de hero sigue siendo grande después de la compresión")
+                }
+
+                newImages.push(base64String)
 
                 if (newImages.length === filesToProcess.filter((f) => f !== file || isValid).length) {
                   const updatedImages = [...images, ...newImages].slice(0, maxImages)
@@ -146,7 +163,14 @@ export default function ImageUploader({
 
   return (
     <div className="space-y-4">
-      <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" multiple className="hidden" />
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        accept={imageType === "hero" ? "image/jpeg,image/png" : "image/*"}
+        multiple
+        className="hidden"
+      />
 
       <Button
         type="button"
@@ -156,6 +180,9 @@ export default function ImageUploader({
       >
         <Upload className="h-6 w-6" />
         <span>Upload Images</span>
+        {imageType === "hero" && (
+          <span className="text-xs text-muted-foreground">Preferiblemente JPG o PNG, máx. 2MB</span>
+        )}
       </Button>
       {error && <p className="text-sm text-destructive mt-2">{error}</p>}
 
